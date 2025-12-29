@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './lib/supabase'
-import { Call } from './types'
+import type { Call } from './types'
 import { CallCard } from './components/CallCard'
 import { StatsCard } from './components/StatsCard'
 import { BarChart3, Clock, Phone, CalendarCheck, Heart } from 'lucide-react'

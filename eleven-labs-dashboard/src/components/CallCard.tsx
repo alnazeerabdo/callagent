@@ -1,5 +1,5 @@
-import { Call } from '../types'
-import { Phone, Clock, FileText, Heart, Calendar, Play } from 'lucide-react'
+import type { Call } from '../types'
+import { Phone, Clock, Heart, Calendar } from 'lucide-react'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 
