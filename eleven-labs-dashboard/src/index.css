@@ -15,7 +15,8 @@
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 263.4 70% 50.4%; /* Purple */
+    --primary: 263.4 70% 50.4%;
+    /* Purple */
     --primary-foreground: 210 40% 98%;
 
     --secondary: 240 3.7% 15.9%;
@@ -40,8 +41,9 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Tajawal', sans-serif;
