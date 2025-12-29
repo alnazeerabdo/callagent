@@ -4,18 +4,23 @@ interface StatsCardProps {
     title: string
     value: string | number
     icon: LucideIcon
-    color: string
+    description?: string
 }
 
-export function StatsCard({ title, value, icon: Icon, color }: StatsCardProps) {
+export function StatsCard({ title, value, icon: Icon, description }: StatsCardProps) {
     return (
-        <div className="bg-card text-card-foreground p-6 rounded-xl border shadow-sm flex items-center justify-between">
+        <div className="bg-card text-card-foreground rounded-xl border p-6 shadow-sm flex items-center justify-between">
             <div>
-                <p className="text-sm text-muted-foreground font-medium mb-1">{title}</p>
-                <h3 className="text-3xl font-bold tracking-tight">{value}</h3>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{title}</p>
+                <div className="flex items-baseline gap-2">
+                    <h3 className="text-2xl font-bold">{value}</h3>
+                </div>
+                {description && (
+                    <p className="text-xs text-muted-foreground mt-1 opacity-80">{description}</p>
+                )}
             </div>
-            <div className={`p-3 rounded-full ${color} bg-opacity-10`}>
-                <Icon size={24} className={color.replace('bg-', 'text-').replace('/10', '')} style={{ opacity: 1 }} />
+            <div className="bg-primary/10 text-primary p-3 rounded-xl">
+                <Icon size={24} />
             </div>
         </div>
     )

@@ -3,51 +3,39 @@ import { supabase } from './lib/supabase'
 import type { Call } from './types'
 import { CallCard } from './components/CallCard'
 import { StatsCard } from './components/StatsCard'
-import { BarChart3, Clock, Phone, CalendarCheck, Heart } from 'lucide-react'
+import { Sidebar } from './components/Sidebar'
+import { Clock, Phone, CalendarCheck, Heart } from 'lucide-react'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 
-function App() {
+function DashboardContent() {
   const [calls, setCalls] = useState<Call[]>([])
   const [loading, setLoading] = useState(true)
+  const location = useLocation()
 
   useEffect(() => {
     fetchCalls()
 
-    // Subscribe to realtime changes
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'calls',
-        },
-        (payload) => {
-          setCalls((current) => [payload.new as Call, ...current])
-        }
-      )
+    const subscription = supabase
+      .channel('calls')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'calls' }, () => {
+        fetchCalls()
+      })
       .subscribe()
 
     return () => {
-      supabase.removeChannel(channel)
+      subscription.unsubscribe()
     }
   }, [])
 
   async function fetchCalls() {
     try {
-      setLoading(true)
       const { data, error } = await supabase
         .from('calls')
         .select('*')
         .order('created_at', { ascending: false })
 
-      if (error) {
-        throw error
-      }
-
-      if (data) {
-        setCalls(data as Call[])
-      }
+      if (error) throw error
+      setCalls(data || [])
     } catch (error) {
       console.error('Error fetching calls:', error)
     } finally {
@@ -55,88 +43,121 @@ function App() {
     }
   }
 
-  // Calculate stats
-  const totalCalls = calls.length
-  const totalDuration = calls.reduce((acc, call) => acc + (call.duration || 0), 0)
-  const averageDuration = totalCalls > 0 ? Math.floor(totalDuration / totalCalls) : 0
-  const meetingRequests = calls.filter(c => c.meeting_requested).length
-  const positiveFeedback = calls.filter(c => c.love_the_call).length
+  const stats = {
+    total: calls.length,
+    duration: Math.round(calls.reduce((acc, call) => acc + (call.duration || 0), 0) / calls.length) || 0,
+    meetings: calls.filter(c => c.meeting_requested).length,
+    positive: calls.filter(c => c.love_the_call).length
+  }
+
+  // Filter calls based on current route
+  const getFilteredCalls = () => {
+    switch (location.pathname) {
+      case '/meetings':
+        return calls.filter(c => c.meeting_requested)
+      case '/leads':
+        // "Interested" logic: love_the_call is true OR meeting requested
+        return calls.filter(c => c.love_the_call || c.meeting_requested) // Or strict love_the_call? User said "interested but not scheduled" implies a separate bucket, but generally "leads" covers both. Let's do love_the_call logic.
+      case '/calls':
+        return calls
+      default:
+        return calls.slice(0, 5) // Recent calls on dashboard
+    }
+  }
+
+  const filteredCalls = getFilteredCalls()
+  const pageTitle = {
+    '/': 'لوحة التحكم',
+    '/meetings': 'طلبات الاجتماع',
+    '/leads': 'المهتمين',
+    '/calls': 'سجل المكالمات'
+  }[location.pathname] || 'لوحة التحكم'
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans" dir="rtl">
-      {/* Header */}
-      <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white shadow-lg shadow-primary/20">
-              <BarChart3 size={24} />
-            </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-l from-primary to-purple-400 bg-clip-text text-transparent">
-              لوحة التحكم
-            </h1>
+    <div className="flex min-h-screen bg-background text-foreground dir-rtl font-sans">
+      {/* Sidebar */}
+      <Sidebar className="w-64 hidden md:block shrink-0" />
+
+      {/* Main Content */}
+      <div className="flex-1 p-8 overflow-y-auto">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight mb-2">{pageTitle}</h1>
+          <p className="text-muted-foreground">نظرة عامة على أداء الوكيل الصوتي</p>
+        </header>
+
+        {/* Stats Grid - Only show on main dashboard */}
+        {location.pathname === '/' && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+            <StatsCard
+              title="إجمالي المكالمات"
+              value={stats.total}
+              icon={Phone}
+              description="مكالمة تم إجراؤها"
+            />
+            <StatsCard
+              title="متوسط المدة"
+              value={`${stats.duration} ثانية`}
+              icon={Clock}
+              description="لكل مكالمة"
+            />
+            <StatsCard
+              title="طلبات الاجتماع"
+              value={stats.meetings}
+              icon={CalendarCheck}
+              description="اجتماع مجدول"
+            />
+            <StatsCard
+              title="تقييم إيجابي"
+              value={stats.positive}
+              icon={Heart}
+              description="عملاء راضون"
+            />
           </div>
-          <div className="text-sm text-muted-foreground font-medium bg-secondary px-3 py-1.5 rounded-full">
-            ElevenLabs Agent
+        )}
+
+        {/* Call List */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">
+              {location.pathname === '/' ? 'أحدث المكالمات' : 'قائمة المكالمات'}
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              {filteredCalls.length} مكالمة
+            </span>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+            {filteredCalls.map((call) => (
+              <CallCard key={call.id} call={call} />
+            ))}
+            {filteredCalls.length === 0 && (
+              <div className="col-span-full text-center py-12 text-muted-foreground bg-card rounded-lg border border-dashed">
+                لا توجد مكالمات لعرضها
+              </div>
+            )}
           </div>
         </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 space-y-8">
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard
-            title="إجمالي المكالمات"
-            value={totalCalls}
-            icon={Phone}
-            color="text-primary bg-primary/10"
-          />
-          <StatsCard
-            title="متوسط المدة (ثانية)"
-            value={averageDuration}
-            icon={Clock}
-            color="text-blue-500 bg-blue-500/10"
-          />
-          <StatsCard
-            title="طلبات الاجتماع"
-            value={meetingRequests}
-            icon={CalendarCheck}
-            color="text-green-500 bg-green-500/10"
-          />
-          <StatsCard
-            title="تقييم إيجابي"
-            value={positiveFeedback}
-            icon={Heart}
-            color="text-pink-500 bg-pink-500/10"
-          />
-        </div>
-
-        {/* Recent Calls */}
-        <div>
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <div className="w-1 h-6 bg-primary rounded-full"></div>
-            أحدث المكالمات
-          </h2>
-
-          {loading ? (
-            <div className="grid place-items-center py-20 text-muted-foreground animate-pulse">
-              جاري التحميل...
-            </div>
-          ) : calls.length === 0 ? (
-            <div className="text-center py-20 border rounded-xl bg-secondary/20">
-              <p className="text-lg text-muted-foreground">لا توجد مكالمات مسجلة حتى الآن</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {calls.map((call) => (
-                <CallCard key={call.id} call={call} />
-              ))}
-            </div>
-          )}
-        </div>
-
-      </main>
+      </div>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter basename="/callagent">
+      {/* NOTE: basename is critical for GitHub Pages subdirectory deployment */}
+      <Routes>
+        <Route path="*" element={<DashboardContent />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
